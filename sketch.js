@@ -488,7 +488,7 @@ function togglePlay() {
 }
 
 // ---------- THE TEXT AT THE TOP ----------
-const ABOUT = '12 blocks, one for each hour. A block turns solid when its hour is over. Inside,\nthe field closes one step per minute, 5 minutes to a block.';
+const ABOUT = '12 blocks, one for each hour. A block turns solid when its hour is over.\nInside, the field closes one step per minute, 5 minutes to a block.';
 const ABOUT_KEYS = [
   ['\u2190 \u2192', 'MIN'], ['\u2191 \u2193', 'HOUR'], ['R', 'REAL TIME'], ['A', 'PLAY'], ['D', 'SECONDS'],
   ['C / CLICK', 'COLOR'], ['N', 'SCREEN'], ['X', 'GRAIN'], ['F', 'FRAME'], ['G', 'GUTTER'],
