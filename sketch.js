@@ -1,9 +1,9 @@
 // ---------- SETTINGS ----------
 let offset = 0;                  // minutes added to the real time (arrow keys change this)
 let frozenAt = null;             // space bar freezes the time here (in minutes after midnight)
-let themeIndex = 1;              // C: cycles the color themes (always just two colors: paper and ink)
+let themeIndex = 0;              // C: cycles the color themes (always just two colors: paper and ink)
 let typeIndex = 1;               // T: cycles the typefaces
-let toneIndex = 2;               // N: how hours still to come are printed (halftone dots, diagonal hatch, flat tint)
+let toneIndex = 0;               // N: how hours still to come are printed (0 dots, 1 diagonal lines, 2 flat tint)
 let grainLevel = 1;              // X: paper grain off / light / heavy
 let frameIndex = 1;              // F: cycles the frame weight
 let gapIndex = 2;                // G: cycles the space between boxes (the gutter)
