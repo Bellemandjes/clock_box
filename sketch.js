@@ -15,6 +15,9 @@ let playing = false;             // A: the time runs through the day very fast
 let speedIndex = 0;              // S: cycles the play speed
 let aboutMode = 1;               // 1 = the text replaces the key table, 2 = the text sits above the key table
 let showSeconds = true;          // D: the ruler of 60 ticks (seconds) under the grid
+let hideUI = false;              // true for the one frame that is saved: no icons, no play button
+let pendingSave = false;
+let typeNoteUntil = 0;           // the name of the typeface shows in the footer for a moment after pressing T
 let frozenSec = 0;               // the second the poster was frozen at
 
 // Every theme uses only TWO colors: the paper and one ink. Hours still to come are the same ink,
@@ -49,6 +52,18 @@ const TYPES = [
   { name: 'DIDOT + HELVETICA',
     big: "Didot, 'Bodoni 72', 'Bodoni MT', 'Times New Roman', serif", bigWeight: 700, bigSize: 46, bigTrack: 0,
     small: "'Helvetica Neue', Helvetica, Arial, sans-serif", smallWeight: 400, smallTrack: 0.05 },
+  { name: 'AVENIR NEXT',
+    big: "'Avenir Next', Avenir, 'Century Gothic', sans-serif", bigWeight: 700, bigSize: 40, bigTrack: 0,
+    small: "'Avenir Next', Avenir, 'Century Gothic', sans-serif", smallWeight: 500, smallTrack: 0.1 },
+  { name: 'GILL SANS',
+    big: "'Gill Sans', 'Gill Sans MT', Calibri, sans-serif", bigWeight: 700, bigSize: 44, bigTrack: 0,
+    small: "'Gill Sans', 'Gill Sans MT', Calibri, sans-serif", smallWeight: 400, smallTrack: 0.1 },
+  { name: 'OPTIMA',
+    big: "Optima, Candara, 'Segoe UI', sans-serif", bigWeight: 700, bigSize: 42, bigTrack: 0,
+    small: "Optima, Candara, 'Segoe UI', sans-serif", smallWeight: 400, smallTrack: 0.1 },
+  { name: 'BODONI + FUTURA',
+    big: "'Bodoni 72', Didot, 'Bodoni MT', 'Times New Roman', serif", bigWeight: 700, bigSize: 46, bigTrack: 0,
+    small: "Futura, 'Century Gothic', 'Avenir Next', sans-serif", smallWeight: 500, smallTrack: 0.1 },
   { name: 'HELVETICA + MONO',
     big: "'Helvetica Neue', Helvetica, Arial, sans-serif", bigWeight: 700, bigSize: 42, bigTrack: -0.01,
     small: "Menlo, Monaco, 'Courier New', monospace", smallWeight: 400, smallTrack: 0.02 }
@@ -258,6 +273,18 @@ function draw() {
   }
   pop();
 
+  // saving: this frame was drawn without the icons and the play button, so grab the poster now
+  if (pendingSave) {
+    pendingSave = false;
+    try {
+      const img = get(sheetX, sheetY, PW * sheetS, PH * sheetS);
+      save(img, 'time-poster.png');
+    } catch (e) {
+      console.log('Could not save the poster: ' + e);
+    }
+    hideUI = false;
+  }
+
   cursor((overPlay() || hitUnderMouse()) ? 'pointer' : 'default');
 }
 
@@ -398,10 +425,10 @@ function drawHeader(h12, m) {
 
   // ----- settings and keys, starting at the second column and running across to the right edge -----
   hoverName = '';
-  if (!playing) drawAbout(col2, M + 8.5 * 0.75, 2 * g.cell + g.G);   // the text rests while the clock plays
+  if (!playing && !hideUI) drawAbout(col2, M + 8.5 * 0.75, 2 * g.cell + g.G);   // the text rests while the clock plays
 
   // ----- the play button -----
-  drawPlayButton();
+  if (!hideUI) drawPlayButton();
 
   // ----- the seconds ruler -----
   drawSeconds();
@@ -409,7 +436,7 @@ function drawHeader(h12, m) {
   // ----- footer line -----
   fill(...th.ink);
   setSmall(ss);
-  text(hoverName !== '' ? hoverName : (showSeconds ? 'TWELVE HOURS \u00D7 FIVE MINUTES \u00D7 SIXTY SECONDS' : 'TWELVE HOURS \u00D7 FIVE MINUTES'), M, PH - 26);
+  text(hoverName !== '' ? hoverName : millis() < typeNoteUntil ? 'TYPE  ' + TYPES[typeIndex].name : (showSeconds ? 'TWELVE HOURS \u00D7 FIVE MINUTES \u00D7 SIXTY SECONDS' : 'TWELVE HOURS \u00D7 FIVE MINUTES'), M, PH - 26);
 
   try { drawingContext.letterSpacing = '0px'; } catch (e) {}
 }
@@ -733,6 +760,7 @@ function keyPressed() {
   if (key === 'm' || key === 'M') corner = !corner;
   if (key === 'v' || key === 'V') showSheet = !showSheet;
   if (key === 'h' || key === 'H') showHelp = !showHelp;
+  if (key === 't' || key === 'T') { typeIndex = (typeIndex + 1) % TYPES.length; typeNoteUntil = millis() + 2500; }
   if (key === 'p' || key === 'P') savePoster();
 
   // arrow keys: checked by name and by key code so this works in older and newer p5.js
@@ -743,14 +771,10 @@ function keyPressed() {
   return false;
 }
 
-// saves just the poster as a PNG (a bigger browser window gives a bigger file)
+// saves just the poster as a PNG, without the icons and the play button (a bigger browser window gives a bigger file)
 function savePoster() {
-  try {
-    const img = get(sheetX, sheetY, PW * sheetS, PH * sheetS);
-    save(img, 'time-poster.png');
-  } catch (e) {
-    console.log('Could not save the poster: ' + e);
-  }
+  hideUI = true;                  // the next frame is drawn without the icons and the play button
+  pendingSave = true;
 }
 
 function windowResized() {
