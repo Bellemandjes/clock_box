@@ -1,15 +1,15 @@
 // ---------- SETTINGS ----------
 let offset = 0;                  // minutes added to the real time (arrow keys change this)
 let frozenAt = null;             // space bar freezes the time here (in minutes after midnight)
-let themeIndex = 2;              // C: cycles the color themes (always just two colors: paper and ink)
+let themeIndex = 1;              // C: cycles the color themes (always just two colors: paper and ink)
 let typeIndex = 1;               // T: cycles the typefaces
 let toneIndex = 2;               // N: how hours still to come are printed (halftone dots, diagonal hatch, flat tint)
 let grainLevel = 1;              // X: paper grain off / light / heavy
 let frameIndex = 1;              // F: cycles the frame weight
 let gapIndex = 2;                // G: cycles the space between boxes
 let corner = false;              // M: false = builds into the middle, true = into the bottom-right corner
-let showSheet = false;           // V: poster on a dark table (true) or poster fills the window (false)
-let showHelp = true;             // H: hides or shows the small help line
+let showSheet = true;            // V: poster on a dark table (true) or poster fills the window (false)
+let showHelp = true;             // H: hides or shows the small key list printed on the poster
 let activated = false;           // becomes true after the first click or key press
 let playing = false;             // A: the time runs through the day by itself
 let speedIndex = 0;              // S: cycles the play speed
@@ -20,7 +20,7 @@ const THEMES = [
   { name: 'CHARCOAL ON CREAM', paper: [229, 222, 204], ink: [38, 36, 32] },
   { name: 'CREAM ON CHARCOAL', paper: [36, 34, 30],    ink: [232, 225, 208] },
   { name: 'CREAM ON BLUE',     paper: [30, 52, 168],   ink: [234, 231, 220] },
-  { name: 'CREAM ON RED',      paper: [206, 52, 36],  ink: [240, 232, 214] }
+  { name: 'CREAM ON RED',      paper: [206, 52, 36],   ink: [240, 232, 214] }
 ];
 
 // play speeds: step = minutes added each time, every = how many frames between steps (60 frames = 1 second)
@@ -218,8 +218,6 @@ function draw() {
     noTint();
   }
   pop();
-
-  if (showHelp) drawHelp();
 }
 
 // ---------- BOXES ----------
@@ -353,33 +351,49 @@ function drawHeader(h12, m) {
   text('HOURS ' + nf(h12, 2) + ' / 12', M, yc);
   text('MINUTES ' + nf(m, 2) + ' / 60', col2, yc);
 
+  // ----- settings and keys, starting at the second column and running across to the right edge -----
+  drawInfo(col2, M + 8.5 * 0.75, 2 * g.cell + g.G);
+
   // ----- footer line -----
+  fill(...th.ink);
+  setSmall(ss);
   text('TWELVE HOURS \u00D7 FIVE MINUTES', M, PH - 26);
 
   try { drawingContext.letterSpacing = '0px'; } catch (e) {}
 }
 
-// small help lines at the bottom of the window (H hides them)
-function drawHelp() {
+// small, quiet line of settings and keys printed on the poster (H hides it)
+function drawInfo(x, y, w) {
+  if (!showHelp) return;
   const th = THEMES[themeIndex];
-  noStroke();
-  textFont("'Helvetica Neue', Helvetica, Arial, sans-serif");
-  textSize(10);
-  if (typeof textWeight === 'function') textWeight(400);
-  try { drawingContext.letterSpacing = '0.5px'; } catch (e) {}
-  textAlign(LEFT, BASELINE);
-  const status = TYPES[typeIndex].name + '  /  ' + THEMES[themeIndex].name + '  /  ' + TONES[toneIndex] +
-    (playing ? '  /  PLAYING ' + SPEEDS[speedIndex].name : '') + (frozenAt !== null ? '  /  FROZEN' : '');
-  const keys = '← → MIN   ↑ ↓ HOUR   A PLAY   S SPEED   SPACE FREEZE   R REAL   C COLOR   T TYPE   N TONE   X GRAIN   F FRAME   G GAP   M MODE   V VIEW   P SAVE   H HIDE';
-  if (showSheet) fill(235, 235, 230, 200);
-  else fill(...th.ink, 170);
-  if (activated) {
-    text(status, 10, height - 20);
-    text(keys, 10, height - 7);
+  const ss = 8.5;
+  const lead = 12.5;
+  setSmall(ss, 0.08);
+  fill(th.ink[0], th.ink[1], th.ink[2], 175);
+
+  // first line: what is on right now
+  let status;
+  if (!activated) {
+    status = 'CLICK THE POSTER ONCE, THEN USE THE KEYS';
   } else {
-    text('[ CLICK HERE FIRST, THEN USE THE KEYS ]', 10, height - 8);
+    status = TYPES[typeIndex].name + '  /  ' + THEMES[themeIndex].name + '  /  ' + TONES[toneIndex];
+    if (playing) status += '  /  PLAYING ' + SPEEDS[speedIndex].name;
+    if (frozenAt !== null) status += '  /  FROZEN';
   }
-  try { drawingContext.letterSpacing = '0px'; } catch (e) {}
+  text(status, x, y);
+
+  // the keys, running across the width and wrapping onto the next line
+  const keys = ['\u2190 \u2192 MIN', '\u2191 \u2193 HOUR', 'A PLAY', 'S SPEED', 'SPACE FREEZE', 'R REAL',
+                'C COLOR', 'T TYPE', 'N TONE', 'X GRAIN', 'F FRAME', 'G GAP', 'M MODE', 'V VIEW', 'P SAVE', 'H HIDE'];
+  const spacer = 14;
+  let cx = x;
+  let cy = y + lead * 1.5;
+  for (let i = 0; i < keys.length; i++) {
+    const kw = textWidth(keys[i]);
+    if (cx > x && cx + kw > x + w) { cx = x; cy += lead; }
+    text(keys[i], cx, cy);
+    cx += kw + spacer;
+  }
 }
 
 // ---------- CONTROLS ----------
