@@ -76,6 +76,7 @@ const LAYERS = 5;                // minutes per box
 
 let shown = [];                  // how far each box is currently drawn (so changes ease in)
 let sheetX = 0, sheetY = 0, sheetS = 1;
+let toneScale = 0.125;           // size of one tile of the screen, in poster units per tile pixel
 let tonePattern = null;          // the screen used for hours still to come
 let grain = null;                // the paper grain, drawn over everything
 let builtFor = '';               // remembers which theme + tone the screen and grain were built for
@@ -140,8 +141,12 @@ function buildTone() {
   } else if (bitmap) {
     g.beginPath(); g.arc(32, 32, 15, 0, Math.PI * 2); g.fill();     // big, spaced dots on a straight grid
   } else if (TONES[toneIndex] === 'HALFTONE') {
-    g.beginPath(); g.arc(8, 8, 7.6, 0, Math.PI * 2); g.fill();      // dots on a 45 degree grid
-    g.beginPath(); g.arc(24, 24, 7.6, 0, Math.PI * 2); g.fill();
+    // dots on a 45 degree grid, sitting on the corners and the middle of the tile,
+    // so a box that starts at a tile corner is a mirror image of itself, top to bottom and left to right
+    const pts = [[0, 0], [32, 0], [0, 32], [32, 32], [16, 16]];
+    for (let q = 0; q < pts.length; q++) {
+      g.beginPath(); g.arc(pts[q][0], pts[q][1], 7.6, 0, Math.PI * 2); g.fill();
+    }
   } else {
     g.strokeStyle = g.fillStyle;                                    // diagonal hatch lines
     g.lineWidth = 7.5;
@@ -152,8 +157,7 @@ function buildTone() {
     g.stroke();
   }
   tonePattern = drawingContext.createPattern(tile, 'repeat');
-  const sc = stipple ? 0.5 : 0.125;
-  try { tonePattern.setTransform(new DOMMatrix([sc, 0, 0, sc, 0, 0])); } catch (e) {}
+  toneScale = stipple ? 0.5 : 0.125;
 }
 
 // fine speckle: dark specks of ink and light specks of paper, like ink on rough stock
@@ -197,6 +201,8 @@ function toneRect(x, y, w, h) {
   if (tonePattern) {
     // save / restore so the screen does not leak into the next fill (p5 would not know the color changed)
     drawingContext.save();
+    // start the screen at this box's own top-left corner, so every box gets the same, even edges
+    try { tonePattern.setTransform(new DOMMatrix([toneScale, 0, 0, toneScale, x, y])); } catch (e) {}
     drawingContext.fillStyle = tonePattern;
     drawingContext.fillRect(x, y, w, h);
     drawingContext.restore();
@@ -429,7 +435,7 @@ function drawSeconds() {
 const ABOUT = '12 blocks, one for each hour. A block turns solid when its hour is over. Inside, the field closes one step per minute, 5 minutes to a block.';
 const ABOUT_KEYS = [
   ['\u2190 \u2192', 'MIN'], ['\u2191 \u2193', 'HOUR'], ['R', 'REAL TIME'], ['A', 'PLAY'], ['D', 'SECONDS'],
-  ['C', 'COLOR'], ['N', 'SCREEN'], ['X', 'GRAIN'], ['F', 'FRAME'], ['G', 'GUTTER'],
+  ['C / CLICK', 'COLOR'], ['N', 'SCREEN'], ['X', 'GRAIN'], ['F', 'FRAME'], ['G', 'GUTTER'],
   ['P', 'SAVE'], ['H', 'HIDE']
 ];
 
@@ -437,8 +443,8 @@ const ABOUT_KEYS = [
 function drawAbout(x, y, w) {
   if (!showHelp) return;
   const th = THEMES[themeIndex];
-  const ss = 10;
-  const lead = 14.5;
+  const ss = 11.5;
+  const lead = 16.5;
   noStroke();
 
   // the description, wrapped to the width
@@ -485,16 +491,11 @@ function drawAbout(x, y, w) {
     fill(th.ink[0], th.ink[1], th.ink[2]);
     text(ABOUT_KEYS[i][0], cx, cy);
     setSmall(ss, 0.06);
-    fill(th.ink[0], th.ink[1], th.ink[2], 210);
+    fill(th.ink[0], th.ink[1], th.ink[2], 235);
     text(ABOUT_KEYS[i][1], cx + kw + 6, cy);
-    cx += total + 12;
+    cx += total + 14;
   }
 
-  if (!activated) {
-    setSmall(ss, 0.08);
-    fill(th.ink[0], th.ink[1], th.ink[2]);
-    text('CLICK THE POSTER ONCE, THEN USE THE KEYS', x, cy + lead + 4);
-  }
 }
 
 // The keys printed on the poster (H hides it): a small table in four columns.
@@ -540,6 +541,8 @@ function drawInfo(x, y, w) {
 // ---------- CONTROLS ----------
 function mousePressed() {
   activated = true;
+  themeIndex = (themeIndex + 1) % THEMES.length;      // click the poster to change the color
+  return false;
 }
 
 function keyPressed() {
