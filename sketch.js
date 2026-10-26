@@ -258,7 +258,7 @@ function draw() {
   }
   pop();
 
-  cursor(overPlay() ? 'pointer' : 'default');
+  cursor((overPlay() || hitUnderMouse()) ? 'pointer' : 'default');
 }
 
 // ---------- BOXES ----------
@@ -389,7 +389,7 @@ function drawHeader(h12, m) {
   text(ms, x, base);
 
   // ----- small type, set on the same three columns as the boxes -----
-  const ss = 9.5;
+  const ss = 10.5;
   setSmall(ss);
 
   const yc = gy0 - 18;
@@ -397,6 +397,7 @@ function drawHeader(h12, m) {
   text('MINUTES ' + nf(m, 2) + ' / 60', col2, yc);
 
   // ----- settings and keys, starting at the second column and running across to the right edge -----
+  hoverName = '';
   if (!playing) drawAbout(col2, M + 8.5 * 0.75, 2 * g.cell + g.G);   // the text rests while the clock plays
 
   // ----- the play button -----
@@ -408,7 +409,7 @@ function drawHeader(h12, m) {
   // ----- footer line -----
   fill(...th.ink);
   setSmall(ss);
-  text(showSeconds ? 'TWELVE HOURS \u00D7 FIVE MINUTES \u00D7 SIXTY SECONDS' : 'TWELVE HOURS \u00D7 FIVE MINUTES', M, PH - 26);
+  text(hoverName !== '' ? hoverName : (showSeconds ? 'TWELVE HOURS \u00D7 FIVE MINUTES \u00D7 SIXTY SECONDS' : 'TWELVE HOURS \u00D7 FIVE MINUTES'), M, PH - 26);
 
   try { drawingContext.letterSpacing = '0px'; } catch (e) {}
 }
@@ -450,14 +451,9 @@ function playRect() {
     c.font = prev;
     if (typeof mm.actualBoundingBoxAscent === 'number' && mm.actualBoundingBoxAscent > 0) capH = mm.actualBoundingBoxAscent;
   } catch (e) {}
-  // as tall as the digits, level with them, just after the time
-  // the button stays put: it is placed after the widest time (12:00), so it does not move as the digits change
-  const gap = t.bigSize * 0.2;
-  const A = inkBox('12'), C = inkBox(':'), B = inkBox('00');
-  let ex = M + A.l + A.r;
-  ex = ex + gap + C.l + C.r;
-  ex = ex + gap + B.l + B.r;
-  return { x: ex + t.bigSize * 0.55, y: base - capH, w: capH * 0.87, h: capH };
+  // as tall as the digits, level with them; the tip of the triangle lines up with the right edge of the first box
+  const pw = capH * 0.87;
+  return { x: M + g.cell - pw, y: base - capH, w: pw, h: capH };
 }
 
 function drawPlayButton() {
@@ -488,15 +484,56 @@ function togglePlay() {
 }
 
 // ---------- THE TEXT AT THE TOP ----------
-const ABOUT = '12 blocks, one for each hour. A block turns solid when its hour is over.\nInside, the field closes one step per minute, 5 minutes to a block.';
+const ABOUT = '';                       // no sentence up here
+// [key shown, name shown, what clicking it does]
 const ABOUT_KEYS = [
-  ['\u2190 \u2192', 'MIN'], ['\u2191 \u2193', 'HOUR'], ['R', 'REAL TIME'], ['A', 'PLAY'], ['D', 'SECONDS'],
-  ['C / CLICK', 'COLOR'], ['N', 'SCREEN'], ['X', 'GRAIN'], ['F', 'FRAME'], ['G', 'GUTTER'],
-  ['P', 'SAVE'], ['H', 'HIDE']
+  ['\u2190 \u2192', 'MIN', 'min'], ['\u2191 \u2193', 'HOUR', 'hour'], ['R', 'REAL TIME', 'r'], ['A', 'PLAY', 'a'], ['D', 'SECONDS', 'd'],
+  ['C / CLICK', 'COLOR', 'c'], ['N', 'SCREEN', 'n'], ['X', 'GRAIN', 'x'], ['F', 'FRAME', 'f'], ['G', 'GUTTER', 'g'],
+  ['P', 'SAVE', 'p'], ['H', 'HIDE', 'h']
 ];
+let hoverName = '';
+const ICON_REST = 1;                 // how visible the icons are once they have faded (1 = they never fade)
+let iconAlpha = 1;                  // how visible the icons are (1 = fully, 0 = gone)
+let iconsUntil = 6000;              // the icons stay visible for the first few seconds, then fade away
+let hits = [];                      // where each control sits on the poster, so it can be clicked
+
+// does the same thing as pressing the key (back = true goes the other way for the time)
+function doAction(a, back) {
+  if (a === 'r') { offset = 0; frozenAt = null; playing = false; showSeconds = true; }
+  if (a === 'a') togglePlay();
+  if (a === 'd') showSeconds = !showSeconds;
+  if (a === 'c') themeIndex = (themeIndex + 1) % THEMES.length;
+  if (a === 'n') toneIndex = (toneIndex + 1) % TONES.length;
+  if (a === 'x') grainLevel = (grainLevel + 1) % 3;
+  if (a === 'f') frameIndex = (frameIndex + 1) % FRAMES.length;
+  if (a === 'g') gapIndex = (gapIndex + 1) % GAPS.length;
+  if (a === 'm') corner = !corner;
+  if (a === 'v') showSheet = !showSheet;
+  if (a === 'h') showHelp = !showHelp;
+  if (a === 'p') savePoster();
+  if (a === 'min') shiftTime(back ? -1 : 1);
+  if (a === 'hour') shiftTime(back ? -60 : 60);
+}
+
+// the mouse position in poster units
+function mouseOnPoster() {
+  return { x: (mouseX - sheetX) / sheetS, y: (mouseY - sheetY) / sheetS };
+}
+
+// which control (if any) is under the mouse
+function hitUnderMouse() {
+  if (iconAlpha < 0.5) return null;                      // hidden icons cannot be clicked by accident
+  const p = mouseOnPoster();
+  for (let i = 0; i < hits.length; i++) {
+    const h = hits[i];
+    if (p.x >= h.x && p.x <= h.x + h.w && p.y >= h.y && p.y <= h.y + h.h) return h;
+  }
+  return null;
+}
 
 // the description, then (in mode 1) the keys as a running line, or (in mode 2) the key table underneath
 function drawAbout(x, y, w) {
+  hits = [];
   if (!showHelp) return;
   const th = THEMES[themeIndex];
   const ss = 11.5;
@@ -530,31 +567,100 @@ function drawAbout(x, y, w) {
     return;
   }
 
-  // mode 1: "Change the clock:" and then every key, flowing along the line
-  cy += 6;
-  let cx = x;
-  setSmall(ss, 0.06);
-  fill(th.ink[0], th.ink[1], th.ink[2]);
-  text('Change the clock:', cx, cy);
-  cx += textWidth('Change the clock:') + 10;
-  for (let i = 0; i < ABOUT_KEYS.length; i++) {
-    setSmall(ss, 0.06);
-    if (typeof textWeight === 'function') textWeight(700);
-    const kw = textWidth(ABOUT_KEYS[i][0]);
-    setSmall(ss, 0.06);
-    const vw = textWidth(ABOUT_KEYS[i][1]);
-    const total = kw + 6 + vw;
-    if (cx + total > x + w) { cx = x; cy += lead; }
-    setSmall(ss, 0.06);
-    if (typeof textWeight === 'function') textWeight(700);
-    fill(th.ink[0], th.ink[1], th.ink[2]);
-    text(ABOUT_KEYS[i][0], cx, cy);
-    setSmall(ss, 0.06);
-    fill(th.ink[0], th.ink[1], th.ink[2], 235);
-    text(ABOUT_KEYS[i][1], cx + kw + 6, cy);
-    cx += total + 14;
-  }
+  // the controls: seven pictograms in one row, level with the time, running from the second column to the right edge of the grid
+  const size = 12.5;                                    // small, set on the footer line
+  const step = 30;
+  const r = { y: PH - 26 - size + 1, h: size };          // level with the footer text
+  const c = drawingContext;
+  const mp = mouseOnPoster();
+  const n = ICONS.length;
+  let hovered = null;
 
+  // the icons show for the first few seconds, then fade away. Move the mouse over the row (or near it) and they come back.
+  const nearRow = mp.x >= x + w - (n - 1) * step - 40 && mp.x <= x + w + 24 && mp.y >= r.y - 30 && mp.y <= r.y + r.h + 30;
+  if (nearRow) iconsUntil = millis() + 1500;            // stay a moment after the mouse leaves
+  const target = millis() < iconsUntil ? 1 : ICON_REST;
+  iconAlpha += (target - iconAlpha) * 0.1;
+  if (abs(target - iconAlpha) < 0.01) iconAlpha = target;
+
+  for (let k = 0; k < n; k++) {
+    const ix = x + w - size - (n - 1 - k) * step;       // right-aligned to the edge of the grid
+    const iy = r.y;
+    const hit = { x: ix - 7, y: iy - 8, w: size + 14, h: size + 16, a: ICONS[k][2], ix: ix, iy: iy, size: size, name: ICONS[k][0] };
+    hits.push(hit);
+    const over = mp.x >= hit.x && mp.x <= hit.x + hit.w && mp.y >= hit.y && mp.y <= hit.y + hit.h;
+    if (over && iconAlpha > 0.5) hovered = hit;
+    c.save();
+    c.globalAlpha = (over && iconAlpha > 0.5 ? 0.4 : 1) * iconAlpha;   // the icon under the mouse fades, so you can tell it is a button
+    drawIcon(ICONS[k][1], ix, iy, size, th);
+    c.restore();
+  }
+  if (hovered) hoverName = hovered.name;
+}
+
+// ---------- THE PICTOGRAMS ----------
+// [name shown on hover, shape, what clicking does]
+const ICONS = [
+  ['SECONDS  D', 'sec', 'd'],
+  ['COLOR  C', 'color', 'c'],
+  ['SCREEN  N', 'screen', 'n'],
+  ['GRAIN  X', 'grain', 'x'],
+  ['FRAME  F', 'frame', 'f'],
+  ['GUTTER  G', 'gutter', 'g'],
+  ['SAVE  P', 'save', 'p']
+];
+
+function drawIcon(kind, x, y, s, th) {
+  const c = drawingContext;
+  const ink = 'rgb(' + th.ink[0] + ',' + th.ink[1] + ',' + th.ink[2] + ')';
+  const paper = 'rgb(' + th.paper[0] + ',' + th.paper[1] + ',' + th.paper[2] + ')';
+  const m = s / 2;
+  const tri = function (a, b, c2, d, e, f) { c.beginPath(); c.moveTo(a, b); c.lineTo(c2, d); c.lineTo(e, f); c.closePath(); c.fill(); };
+  c.fillStyle = ink;
+  c.strokeStyle = ink;
+  c.lineWidth = 1.4;
+  if (kind === 'min') {                                // two triangles, left and right
+    tri(x, y + m, x + s * 0.4, y + m - s * 0.3, x + s * 0.4, y + m + s * 0.3);
+    tri(x + s, y + m, x + s * 0.6, y + m - s * 0.3, x + s * 0.6, y + m + s * 0.3);
+  } else if (kind === 'hour') {                        // two triangles, up and down
+    tri(x + m, y, x + m - s * 0.3, y + s * 0.4, x + m + s * 0.3, y + s * 0.4);
+    tri(x + m, y + s, x + m - s * 0.3, y + s * 0.6, x + m + s * 0.3, y + s * 0.6);
+  } else if (kind === 'real') {                        // a square ring with a square in the middle: now
+    c.fillRect(x, y, s, s);
+    c.fillStyle = paper;
+    c.fillRect(x + s * 0.2, y + s * 0.2, s * 0.6, s * 0.6);
+    c.fillStyle = ink;
+    c.fillRect(x + s * 0.36, y + s * 0.36, s * 0.28, s * 0.28);
+  } else if (kind === 'sec') {                         // one small square
+    c.fillRect(x + s * 0.3, y + s * 0.3, s * 0.4, s * 0.4);
+  } else if (kind === 'color') {                       // a square split in two colors
+    c.fillRect(x, y, s, s);
+    c.fillStyle = paper;
+    c.beginPath(); c.moveTo(x + s, y); c.lineTo(x + s, y + s); c.lineTo(x, y + s); c.fill();
+    c.strokeRect(x, y, s, s);
+  } else if (kind === 'screen') {                      // four squares
+    const q = s * 0.4;
+    for (let i = 0; i < 2; i++) {
+      for (let j = 0; j < 2; j++) c.fillRect(x + i * (s - q), y + j * (s - q), q, q);
+    }
+  } else if (kind === 'grain') {                       // three specks on a diagonal
+    const q = s * 0.24;
+    c.fillRect(x, y + s - q, q, q);
+    c.fillRect(x + m - q / 2, y + m - q / 2, q, q);
+    c.fillRect(x + s - q, y, q, q);
+  } else if (kind === 'frame') {                       // a square with a square hole
+    c.fillRect(x, y, s, s);
+    c.fillStyle = paper;
+    c.fillRect(x + s * 0.24, y + s * 0.24, s * 0.52, s * 0.52);
+  } else if (kind === 'gutter') {                      // two bars with a gap
+    c.fillRect(x, y, s * 0.42, s);
+    c.fillRect(x + s * 0.58, y, s * 0.42, s);
+  } else if (kind === 'save') {                        // one triangle pointing down
+    tri(x, y + s * 0.1, x + s, y + s * 0.1, x + m, y + s * 0.9);
+  } else if (kind === 'hide') {                        // an empty square
+    c.lineWidth = 2.2;
+    c.strokeRect(x + 1.1, y + 1.1, s - 2.2, s - 2.2);
+  }
 }
 
 // The keys printed on the poster (H hides it): a small table in four columns.
@@ -600,7 +706,15 @@ function drawInfo(x, y, w) {
 // ---------- CONTROLS ----------
 function mousePressed() {
   activated = true;
-  if (overPlay()) togglePlay();                         // the play button
+  const hit = hitUnderMouse();
+  if (hit) {
+    const mp = mouseOnPoster();
+    let back = false;
+    if (hit.a === 'min') back = mp.x < hit.ix + hit.size / 2;      // left half: a minute back, right half: a minute on
+    if (hit.a === 'hour') back = mp.y > hit.iy + hit.size / 2;     // top half: an hour on, bottom half: an hour back
+    doAction(hit.a, back);
+  }
+  else if (overPlay()) togglePlay();                    // the play button
   else themeIndex = (themeIndex + 1) % THEMES.length;   // anywhere else on the poster: change the color
   return false;
 }
