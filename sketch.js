@@ -258,6 +258,7 @@ function draw() {
   }
   pop();
 
+  cursor(overPlay() ? 'pointer' : 'default');
 }
 
 // ---------- BOXES ----------
@@ -396,7 +397,10 @@ function drawHeader(h12, m) {
   text('MINUTES ' + nf(m, 2) + ' / 60', col2, yc);
 
   // ----- settings and keys, starting at the second column and running across to the right edge -----
-  drawAbout(col2, M + 8.5 * 0.75, 2 * g.cell + g.G);
+  if (!playing) drawAbout(col2, M + 8.5 * 0.75, 2 * g.cell + g.G);   // the text rests while the clock plays
+
+  // ----- the play button -----
+  drawPlayButton();
 
   // ----- the seconds ruler -----
   drawSeconds();
@@ -431,8 +435,60 @@ function drawSeconds() {
   }
 }
 
+// ---------- THE PLAY BUTTON ----------
+// a solid block under the time, with a play triangle (or two pause bars while it is running)
+function playRect() {
+  const t = TYPES[typeIndex];
+  const g = gridSize();
+  const base = M + t.bigSize * 0.72;                     // the baseline of the time
+  let capH = t.bigSize * 0.72;                           // the height of the digits
+  try {
+    const c = drawingContext;
+    const prev = c.font;
+    c.font = t.bigWeight + ' ' + t.bigSize + 'px ' + t.big;
+    const mm = c.measureText('0123456789');
+    c.font = prev;
+    if (typeof mm.actualBoundingBoxAscent === 'number' && mm.actualBoundingBoxAscent > 0) capH = mm.actualBoundingBoxAscent;
+  } catch (e) {}
+  // as tall as the digits, level with them, just after the time
+  // the button stays put: it is placed after the widest time (12:00), so it does not move as the digits change
+  const gap = t.bigSize * 0.2;
+  const A = inkBox('12'), C = inkBox(':'), B = inkBox('00');
+  let ex = M + A.l + A.r;
+  ex = ex + gap + C.l + C.r;
+  ex = ex + gap + B.l + B.r;
+  return { x: ex + t.bigSize * 0.55, y: base - capH, w: capH * 0.87, h: capH };
+}
+
+function drawPlayButton() {
+  const th = THEMES[themeIndex];
+  const r = playRect();
+  noStroke();
+  fill(...th.ink);
+  if (playing) {
+    rect(r.x, r.y, r.w * 0.36, r.h);                    // two bars: pause
+    rect(r.x + r.w * 0.64, r.y, r.w * 0.36, r.h);
+  } else {
+    triangle(r.x, r.y, r.x, r.y + r.h, r.x + r.w, r.y + r.h / 2);   // a bare triangle: play
+  }
+}
+
+// is the mouse over the play button?
+function overPlay() {
+  const r = playRect();
+  const px = (mouseX - sheetX) / sheetS;
+  const py = (mouseY - sheetY) / sheetS;
+  const pad = 6;                                          // a little extra to click on
+  return px >= r.x - pad && px <= r.x + r.w + pad && py >= r.y - pad && py <= r.y + r.h + pad;
+}
+
+function togglePlay() {
+  playing = !playing;
+  showSeconds = !playing;          // the seconds rest while it plays (press D to bring them back)
+}
+
 // ---------- THE TEXT AT THE TOP ----------
-const ABOUT = '12 blocks, one for each hour. A block turns solid when its hour is over. Inside, the field closes one step per minute, 5 minutes to a block.';
+const ABOUT = '12 blocks, one for each hour. A block turns solid when its hour is over. Inside,\nthe field closes one step per minute, 5 minutes to a block.';
 const ABOUT_KEYS = [
   ['\u2190 \u2192', 'MIN'], ['\u2191 \u2193', 'HOUR'], ['R', 'REAL TIME'], ['A', 'PLAY'], ['D', 'SECONDS'],
   ['C / CLICK', 'COLOR'], ['N', 'SCREEN'], ['X', 'GRAIN'], ['F', 'FRAME'], ['G', 'GUTTER'],
@@ -450,21 +506,24 @@ function drawAbout(x, y, w) {
   // the description, wrapped to the width
   setSmall(ss, 0.04);
   fill(th.ink[0], th.ink[1], th.ink[2]);
-  const words = ABOUT.split(' ');
-  let line = '';
+  const rows = ABOUT.split('\n');
   let cy = y;
-  for (let i = 0; i < words.length; i++) {
-    const test = line === '' ? words[i] : line + ' ' + words[i];
-    if (textWidth(test) > w && line !== '') {
-      text(line, x, cy);
-      cy += lead;
-      line = words[i];
-    } else {
-      line = test;
+  for (let r = 0; r < rows.length; r++) {
+    const words = rows[r].split(' ');
+    let line = '';
+    for (let i = 0; i < words.length; i++) {
+      const test = line === '' ? words[i] : line + ' ' + words[i];
+      if (textWidth(test) > w && line !== '') {
+        text(line, x, cy);
+        cy += lead;
+        line = words[i];
+      } else {
+        line = test;
+      }
     }
+    text(line, x, cy);
+    cy += lead;
   }
-  text(line, x, cy);
-  cy += lead;
 
   if (aboutMode === 2) {
     drawInfo(x, cy + 6, w);
@@ -541,7 +600,8 @@ function drawInfo(x, y, w) {
 // ---------- CONTROLS ----------
 function mousePressed() {
   activated = true;
-  themeIndex = (themeIndex + 1) % THEMES.length;      // click the poster to change the color
+  if (overPlay()) togglePlay();                         // the play button
+  else themeIndex = (themeIndex + 1) % THEMES.length;   // anywhere else on the poster: change the color
   return false;
 }
 
@@ -549,10 +609,7 @@ function keyPressed() {
   activated = true;
 
   if (key === 'r' || key === 'R') { offset = 0; frozenAt = null; playing = false; showSeconds = true; }   // back to the real time
-  if (key === 'a' || key === 'A') {
-    playing = !playing;
-    showSeconds = !playing;          // the seconds rest while it plays (press D to bring them back)
-  }
+  if (key === 'a' || key === 'A') togglePlay();
   if (key === 'd' || key === 'D') showSeconds = !showSeconds;
   if (key === 'c' || key === 'C') themeIndex = (themeIndex + 1) % THEMES.length;
   if (key === 'n' || key === 'N') toneIndex = (toneIndex + 1) % TONES.length;
