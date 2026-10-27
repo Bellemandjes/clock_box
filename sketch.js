@@ -4,7 +4,7 @@ let frozenAt = null;             // space bar freezes the time here (in minutes 
 let themeIndex = 0;              // C: cycles the color themes (always just two colors: paper and ink)
 let typeIndex = 1;               // T: cycles the typefaces
 let toneIndex = 0;               // N: how hours still to come are printed (dots, bitmap dots, diagonal lines, flat tint)
-let grainLevel = 2;              // X: paper grain off / light / heavy
+let grainLevel = 2;              // X: paper grain, light or heavy (it is always there)
 let frameIndex = 1;              // F: cycles the frame weight
 let gapIndex = 1;                // G: cycles the space between boxes
 let corner = false;              // M: false = builds into the middle, true = into the bottom-right corner
@@ -425,7 +425,7 @@ function drawHeader(h12, m) {
 
   // ----- settings and keys, starting at the second column and running across to the right edge -----
   hoverName = '';
-  if (!playing && !hideUI) drawAbout(col2, M + 8.5 * 0.75, 2 * g.cell + g.G);   // the text rests while the clock plays
+  if (!hideUI) drawAbout(col2, M + 8.5 * 0.75, 2 * g.cell + g.G);   // the icons stay while the clock plays
 
   // ----- the play button -----
   if (!hideUI) drawPlayButton();
@@ -464,7 +464,7 @@ function drawSeconds() {
 }
 
 // ---------- THE PLAY BUTTON ----------
-// a solid block under the time, with a play triangle (or two pause bars while it is running)
+// a play triangle (or two pause bars while it is running), level with the time
 function playRect() {
   const t = TYPES[typeIndex];
   const g = gridSize();
@@ -478,9 +478,9 @@ function playRect() {
     c.font = prev;
     if (typeof mm.actualBoundingBoxAscent === 'number' && mm.actualBoundingBoxAscent > 0) capH = mm.actualBoundingBoxAscent;
   } catch (e) {}
-  // as tall as the digits, level with them; the tip of the triangle lines up with the right edge of the first box
+  // as tall as the digits, level with them; its left edge lines up with the left edge of the right-hand column of boxes
   const pw = capH * 0.87;
-  return { x: M + g.cell - pw, y: base - capH, w: pw, h: capH };
+  return { x: M + 2 * (g.cell + g.G), y: base - capH, w: pw, h: capH };
 }
 
 function drawPlayButton() {
@@ -531,7 +531,7 @@ function doAction(a, back) {
   if (a === 'd') showSeconds = !showSeconds;
   if (a === 'c') themeIndex = (themeIndex + 1) % THEMES.length;
   if (a === 'n') toneIndex = (toneIndex + 1) % TONES.length;
-  if (a === 'x') grainLevel = (grainLevel + 1) % 3;
+  if (a === 'x') grainLevel = grainLevel === 2 ? 1 : 2;
   if (a === 'f') frameIndex = (frameIndex + 1) % FRAMES.length;
   if (a === 'g') gapIndex = (gapIndex + 1) % GAPS.length;
   if (a === 'm') corner = !corner;
@@ -754,7 +754,7 @@ function keyPressed() {
   if (key === 'd' || key === 'D') showSeconds = !showSeconds;
   if (key === 'c' || key === 'C') themeIndex = (themeIndex + 1) % THEMES.length;
   if (key === 'n' || key === 'N') toneIndex = (toneIndex + 1) % TONES.length;
-  if (key === 'x' || key === 'X') grainLevel = (grainLevel + 1) % 3;
+  if (key === 'x' || key === 'X') grainLevel = grainLevel === 2 ? 1 : 2;
   if (key === 'f' || key === 'F') frameIndex = (frameIndex + 1) % FRAMES.length;
   if (key === 'g' || key === 'G') gapIndex = (gapIndex + 1) % GAPS.length;
   if (key === 'm' || key === 'M') corner = !corner;
